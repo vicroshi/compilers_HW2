@@ -82,7 +82,6 @@ class DeclVisitor extends GJDepthFirst<String,String>{
         Map<String,String> var = new LinkedHashMap<String,String>();
         vardec = new LinkedHashMap<String,Map<String,String>>();
         methdec = new LinkedHashMap<String, Map<String, String>>();
-//        methdec =
         classdec = new LinkedHashMap<String, String>();
 //        cfields = new LinkedHashMap<String,String>();
 //        cmethods = new LinkedHashMap<String,String>();
@@ -170,8 +169,6 @@ class DeclVisitor extends GJDepthFirst<String,String>{
             }
         }
         methdec.put(classname,methods_st);
-        super.visit(n, classname);
-        System.out.println();
         return null;
     }
 
@@ -273,11 +270,17 @@ class DeclVisitor extends GJDepthFirst<String,String>{
             }
         }
         vardec.put(argu+"::"+methodname,locvars);
-        if(mparams.containsKey(methodname)){
-            if(!mparams.get(methodname).equals(paramtypes) || methodtype){
-                System.out.println(String.format("error tring to overload function %S in class",));
+        String ext = classdec.get(argu);
+        if(ext!=null) {
+            if (mparams.containsKey(ext + "::" + methodname)) {
+                String supertype = methdec.get(ext).get(methodname);
+                if (!mparams.get(ext + "::" + methodname).equals(paramtypes) || !methodtype.equals(supertype)) {
+                    System.out.println(("error: to redefine parent class"+
+                            " function both return and parameters types must match"));
+                }
             }
         }
+        mparams.put(argu+"::"+methodname,paramtypes);
         return methodtype+" "+methodname;
     }
 
