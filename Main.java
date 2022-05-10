@@ -1,4 +1,3 @@
-import org.javatuples.Tuple;
 import syntaxtree.*;
 import visitor.*;
 import java.io.FileInputStream;
@@ -7,7 +6,8 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.util.*;
 
-public class Main {
+public class
+Main {
     public static void main(String[] args) throws Exception {
         for(int i = 0; i < args.length; i++) {
             FileInputStream fis=null;
@@ -18,26 +18,38 @@ public class Main {
                 System.err.println("Program parsed successfully.");
                 DeclVisitor decvis = new DeclVisitor();
                 root.accept(decvis, null);
-                System.out.println("Field Symbol Table:");
-                for (Map.Entry<String, String> e : decvis.cfields.entrySet()) {
-                    System.out.println(e.getValue() + " " + e.getKey());
-                }
-                System.out.println("\nMethod Symbol Table:");
-                for (Map.Entry<String, String> e : decvis.cmethods.entrySet()) {
-                    System.out.println(e.getValue() + " " + e.getKey());
-                }
-                System.out.println("\nMethod Parameter Symbol Table:");
-                for (Map.Entry<String, String> e : decvis.mparams.entrySet()) {
-                    System.out.println(e.getKey() + "(" + e.getValue() + ")");
-                }
-                System.out.println("\nMethod LocalVar Symbol Table:");
-                for (Map.Entry<String, String> e : decvis.mvars.entrySet()) {
-                    System.out.println(e.getValue() + " " + e.getKey());
-                }
-                System.out.println("\nClass Inheritance Table:");
-                for (Map.Entry<String, String> e : decvis.cextends.entrySet()) {
-                    System.out.println(e.getKey() + " extends " + e.getValue());
-                }
+//                System.out.println("Field Symbol Table:");
+//                for (Map.Entry<String, String> e : decvis.cfields.entrySet()) {
+//                    System.out.println(e.getValue() + " " + e.getKey());
+//                }
+//                System.out.println("\nMethod Symbol Table:");
+//                for (Map.Entry<String, String> e : decvis.cmethods.entrySet()) {
+//                    System.out.println(e.getValue() + " " + e.getKey());
+//                }
+//                System.out.println("\nMethod Parameter Symbol Table:");
+//                for (Map.Entry<String, String> e : decvis.mparams.entrySet()) {
+//                    System.out.println(e.getKey() + "(" + e.getValue() + ")");
+//                }
+//                System.out.println("\nMethod LocalVar Symbol Table:");
+//                for (Map.Entry<String, String> e : decvis.mvars.entrySet()) {
+//                    System.out.println(e.getValue() + " " + e.getKey());
+//                }
+//                System.out.println("\nClass Inheritance Table:");
+//                for (Map.Entry<String, String> e : decvis.cextends.entrySet()) {
+//                    System.out.println(e.getKey() + " extends " + e.getValue());
+//                }
+//                for (Map.Entry<String,Map<String,String>> e_outter : DeclVisitor.vardec.entrySet()){
+//                    System.out.println(e_outter.getKey() + " Symbol Table");
+//                    for (Map.Entry<String,String>  e_inner : e_outter.getValue().entrySet()){
+//                        System.out.println(e_inner.getValue() + " " + e_inner.getKey());
+//                    }
+//                }
+//                for (Map.Entry<String,Map<String,String>> e_outter : DeclVisitor.methdec.entrySet()){
+//                    System.out.println(e_outter.getKey() + " Method Symbol Table");
+//                    for (Map.Entry<String,String>  e_inner : e_outter.getValue().entrySet()){
+//                        System.out.println(e_inner.getValue() + " " + e_inner.getKey());
+//                    }
+//                }
                 TypeVisitor typevis = new TypeVisitor();
                 root.accept(typevis,null);
             } catch (ParseException ex) {
@@ -55,19 +67,29 @@ public class Main {
     }
 }
 
+class SemanticError extends Exception{
+    public String getMessage(String error){
+        return "Semantic Error: "+error;
+    }
+}
+
 class DeclVisitor extends GJDepthFirst<String,String>{
-    static Map<String,String> cfields = new LinkedHashMap<String,String>();
-    static Map<String,String> cmethods = new LinkedHashMap<String,String>();
-    static Map<String,String> mparams = new LinkedHashMap<String,String>();
-    static Map<String,String> cextends = new LinkedHashMap<String,String>();
-    static Map<String,String> mvars = new LinkedHashMap<String,String>();
-//    public DeclVisitor(){
+    static Map<String, String[]> mparams = new LinkedHashMap<String, String[]>();
+    static Map<String,Map<String,String>> vardec;
+    static Map<String,Map<String,String>> methdec;
+    static Map<String,String> classdec;
+    public DeclVisitor(){
+        Map<String,String> var = new LinkedHashMap<String,String>();
+        vardec = new LinkedHashMap<String,Map<String,String>>();
+        methdec = new LinkedHashMap<String, Map<String, String>>();
+//        methdec =
+        classdec = new LinkedHashMap<String, String>();
 //        cfields = new LinkedHashMap<String,String>();
 //        cmethods = new LinkedHashMap<String,String>();
 //        mparams = new LinkedHashMap<String,String>();
 //        cextends = new LinkedHashMap<String, String>();
 //        mvars = new LinkedHashMap<String, String>();
-//    }
+    }
     /**
      * Grammar production:
      * f0 -> "class"
@@ -89,13 +111,25 @@ class DeclVisitor extends GJDepthFirst<String,String>{
      * f16 -> "}"
      * f17 -> "}"
      */
+    public void redefinition_error(String type, String var, String scope){
+        System.out.println(String.format("error: %s %s is already defined in %s",type,var,scope));
+    }
+
     public String visit(MainClass n, String argu) throws Exception {
         String classname =  n.f1.accept(this,argu);
+        classdec.put(classname,null);
         String mainvars = n.f14.accept(this,argu);
+        Map<String,String> vars = new LinkedHashMap<String,String>();
         if(!mainvars.isEmpty()) {
             for (String m : mainvars.split(",")) {
                 String[] mainvar = m.split(" ");
-                mvars.put(classname + "::" + "main" + "::" + mainvar[1], mainvar[0]);
+                if(!vars.containsKey(mainvar[1])) {
+                    vars.put(mainvar[1], mainvar[0]);
+                }
+                else{
+                    redefinition_error("variable",mainvar[1],"method " +classname + "::" + "main");
+                }
+                vardec.put(classname + "::" + "main",vars);
             }
         }
         return null;
@@ -112,15 +146,30 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     public String visit(ClassDeclaration n, String argu) throws Exception {
         String classname = n.f1.accept(this, null);
         String fields = n.f3.accept(this,classname);
+        classdec.put(classname,null);
+        Map<String,String> fields_st = new LinkedHashMap<String, String>();
         for(String f: fields.split(",")){
             String[] field = f.split(" ");
-            cfields.put(classname+"::"+field[1],field[0]);
+            if(!fields_st.containsKey(field[1])){
+                fields_st.put(field[1],field[0]);
+            }
+            else {
+                redefinition_error("variable",field[1],"class " +classname);
+            }
         }
+        vardec.put(classname,fields_st);
+        Map<String,String> methods_st = new LinkedHashMap<String, String>();
         String methods = n.f4.accept(this,classname);
         for(String m : methods.split(",")){
             String[] method = m.split(" ");
-            cmethods.put(classname+"::"+method[1],method[0]);
+            if(!methods_st.containsKey(method[1])){
+                    methods_st.put(method[1],method[0]);
+            }
+            else {
+                redefinition_error("method",method[1],"class " + classname);
+            }
         }
+        methdec.put(classname,methods_st);
         super.visit(n, classname);
         System.out.println();
         return null;
@@ -142,21 +191,35 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     public String visit(ClassExtendsDeclaration n, String argu) throws Exception {
         String classname = n.f1.accept(this, null);
         String extname = n.f3.accept(this,classname);
-        cextends.put(classname,extname);
+        if(!classdec.containsKey(extname)){
+            throw new Exception("class %s must be defined before class %s");
+        }
+        classdec.put(classname,extname);
         String fields = n.f5.accept(this,classname);
+        Map<String,String> fields_st = new LinkedHashMap<String, String>();
         for(String f: fields.split(",")){
             String[] field = f.split(" ");
-            cfields.put(classname+"::"+field[1],field[0]);
+            if(!fields_st.containsKey(field[1])){
+                fields_st.put(field[1],field[0]);
+            }
+            else {
+                redefinition_error("variable",field[1],"class " +classname);
+            }
         }
+        vardec.put(classname,fields_st);
+        Map<String,String> methods_st = new LinkedHashMap<String, String>();
         String methods = n.f6.accept(this,classname);
         for(String m : methods.split(",")){
             String[] method = m.split(" ");
-            cmethods.put(classname+"::"+method[1],method[0]);
+            if(!methods_st.containsKey(method[1])){
+                methods_st.put(method[1],method[0]);
+            }
+            else {
+                redefinition_error("method",method[1],"class "+classname);
+            }
         }
 //        System.out.println("Class: " + classname +" extends " + extname);
 //        EXTMap.put(classname,extname);
-        super.visit(n, classname);
-        System.out.println();
         return null;
     }
 
@@ -178,17 +241,44 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     @Override
     public String visit(MethodDeclaration n, String argu) throws Exception {
         String argumentList = n.f4.present() ? n.f4.accept(this, null) : "";
-        String myType = n.f1.accept(this, null);
-        String myName = n.f2.accept(this, null);
-        String localvars = n.f7.accept(this,argu+"::"+myName);
-        if(!localvars.isEmpty()) {
-            for (String l : localvars.split(",", -1)) {
-                String[] localvar = l.split(" ");
-                mvars.put(argu + "::" + myName + "::" + localvar[1], localvar[0]);
+        String methodtype = n.f1.accept(this, null);
+        String methodname = n.f2.accept(this, null);
+        String localvars = n.f4.present() ? n.f7.accept(this,argu+"::"+methodname) : "";
+        Map<String,String> locvars = new LinkedHashMap<String, String>();
+        String[] paramtypes = new String[argumentList.split(",").length];
+
+        if (!argumentList.isEmpty()){
+            int i =0;
+            for (String arg : argumentList.split(",")){
+                String[] argument = arg.split(" ");
+                if(!locvars.containsKey(argument[1])){
+                    locvars.put(argument[1],argument[0]);
+                }
+                else{
+                    redefinition_error("variable",argument[1],"method " + argu+"::"+methodname);
+                }
+                paramtypes[i++] = argument[0];
             }
         }
-        mparams.put(argu+"::"+myName,argumentList);
-        return myType+" "+myName;
+        if(!localvars.isEmpty()) {
+            for (String l : localvars.split(",")) {
+                String[] localvar = l.split(" ");
+                if(!locvars.containsKey(localvar[1])){
+                    locvars.put(localvar[1],localvar[0]);
+                }
+                else{
+                    redefinition_error("variable",localvar[1],"method " + argu+"::"+methodname);
+                }
+
+            }
+        }
+        vardec.put(argu+"::"+methodname,locvars);
+        if(mparams.containsKey(methodname)){
+            if(!mparams.get(methodname).equals(paramtypes) || methodtype){
+                System.out.println(String.format("error tring to overload function %S in class",));
+            }
+        }
+        return methodtype+" "+methodname;
     }
 
     @Override
@@ -230,7 +320,7 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     public String visit(FormalParameterTail n, String argu) throws Exception {
         String ret = "";
         for ( Node node: n.f0.nodes) {
-            ret += ", " + node.accept(this, null);
+            ret += "," + node.accept(this, null);
         }
 
         return ret;
@@ -258,9 +348,9 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     }
 
     @Override
-    public String visit(ArrayType n,String argu) {
-        return "int[]";
-    }
+//    public String visit(ArrayType n,String argu) {
+//        return "int[]";
+//    }
 
     public String visit(BooleanType n, String argu) {
         return "boolean";
@@ -279,6 +369,36 @@ class DeclVisitor extends GJDepthFirst<String,String>{
 
 
 class TypeVisitor extends GJDepthFirst<String,String>{
+    static private Set<String> basictypes = new HashSet<>(Arrays.asList("int","int[]","boolean","boolean[]"));
+    static public List<String> errors =  new LinkedList<>();
+
+    static class ErrorInfo{
+        static public int line;
+        static public String symbol;
+        static public String type;
+        static public String location;
+//        public String message;
+    }
+
+    public void checkUnknownType() throws Exception {
+        for(Map.Entry<String,Map<String,String>> e_outer : DeclVisitor.vardec.entrySet()) {
+            for (Map.Entry<String, String> e_inner : e_outer.getValue().entrySet()) {
+                String type = e_inner.getValue();
+                if (!basictypes.contains(type) && !DeclVisitor.classdec.keySet().contains(type)) {
+                    errors.add(String.format(
+                            "\nerror: cannot find symbol\n\t%s %s;\n" +
+                                    "\t^\n" +
+                                    "symbol:  class %s\n" +
+                                    "location:  class %s",
+                            type, e_inner.getKey(),
+                            type, e_outer.getKey().split("::")[0]));
+                }
+            }
+        }
+    }
+    public void checkUndeclaredID(String scope, String id) throws Exception{
+//        DeclVisitor.vardec.get(scope)
+    }
     /**
      * Grammar production:
      * f0 -> "class"
@@ -300,24 +420,67 @@ class TypeVisitor extends GJDepthFirst<String,String>{
      * f16 -> "}"
      * f17 -> "}"
      */
-    public String visit(MainClass n, String argu) throws Exception{
-        n.f15.accept(this,argu);
+    public String visit(MainClass n, String scope) throws Exception{
+        String classname = n.f1.accept(this,scope);
+//        try{
+            checkUnknownType();
+//        }catch (Exception e){
+//            throw e;
+//        }
+        n.f15.accept(this,classname+"::main");
         return null;
     }
-
 
     /**
-     * Grammar production:
-     * f0 -> Identifier()
-     * f1 -> "="
-     * f2 -> Expression()
-     * f3 -> ";"
+     * f0 -> "class"
+     * f1 -> Identifier()
+     * f2 -> "{"
+     * f3 -> ( VarDeclaration() )*
+     * f4 -> ( MethodDeclaration() )*
+     * f5 -> "}"
      */
-    public String visit(AssignmentStatement n, String argu) throws Exception {
-        String lval = n.f0.accept(this,argu);
-        String rval = n.f2.accept(this,argu);
+    public String visit(ClassDeclaration n, String scope) throws Exception{
+        String classname = n.f1.accept(this,scope);
+        n.f4.accept(this,classname);
+        return classname;
+    }
+    /**
+     * f0 -> "class"
+     * f1 -> Identifier()
+     * f2 -> "extends"
+     * f3 -> Identifier()
+     * f4 -> "{"
+     * f5 -> ( VarDeclaration() )*
+     * f6 -> ( MethodDeclaration() )*
+     * f7 -> "}"
+     */
+    public String visit(ClassExtendsDeclaration n, String scope) throws Exception{
+        String classname = n.f1.accept(this,scope);
+        n.f4.accept(this,classname);
+        return classname;
+    }
+    /**
+     * f0 -> "public"
+     * f1 -> Type()
+     * f2 -> Identifier()
+     * f3 -> "("
+     * f4 -> ( FormalParameterList() )?
+     * f5 -> ")"
+     * f6 -> "{"
+     * f7 -> ( VarDeclaration() )*
+     * f8 -> ( Statement() )*
+     * f9 -> "return"
+     * f10 -> Expression()
+     * f11 -> ";"
+     * f12 -> "}"
+     */
+    public String visit(MethodDeclaration n, String scope) throws Exception{
+        String methodname = n.f2.accept(this,scope);
+        n.f8.accept(this,scope+"::"+methodname);
+        n.f10.accept(this,scope+"::"+methodname);
         return null;
     }
+
     /**
      * Grammar production:
      * f0 -> AndExpression()
@@ -330,14 +493,14 @@ class TypeVisitor extends GJDepthFirst<String,String>{
      *       | MessageSend()
      *       | Clause()
      */
-    public String visit(Expression n, String argu) throws Exception {
-        String exp = n.f0.accept(this,argu);
-        System.out.println(exp);
-        return null;
-    }
-    public String visit(NodeChoice n, String argu) throws Exception {
-        return n.choice.accept(this,argu);
-    }
+//    public String visit(Expression n, String scope) throws Exception {
+//        String exp = n.f0.accept(this,scope);
+//        System.out.println(exp);
+//        return null;
+//    }
+//    public String visit(NodeChoice n, String scope) throws Exception {
+//        return n.choice.accept(this,scope);
+//    }
     /**
      * Grammar production:
      * f0 -> Block()
@@ -347,8 +510,136 @@ class TypeVisitor extends GJDepthFirst<String,String>{
      *       | WhileStatement()
      *       | PrintStatement()
      */
-    public String visit(Statement n, String argu) throws  Exception{
-        String ok = n.f0.accept(this,argu);
+//    public String visit(Statement n, String scope) throws  Exception{
+//        String ok = n.f0.accept(this,scope);
+//        return null;
+//    }
+    /**
+     * Grammar production:
+     * f0 -> Identifier()
+     * f1 -> "="
+     * f2 -> Expression()
+     * f3 -> ";"
+     */
+    public String visit(AssignmentStatement n, String scope) throws Exception {
+        String lval = n.f0.accept(this,scope);
+        String lvaltype = DeclVisitor.vardec.get(scope).get(lval);
+        String exptype = n.f2.accept(this,scope);
+        if(lvaltype == null){
+            System.out.println("undefined variable");
+        }
+        else if(exptype == null){
+            System.out.println("undefined expression");
+        }
+        else if(!lvaltype.equals(exptype)){
+            System.out.println(String.format("type error, trying to assign %s to %s",exptype,lvaltype));
+        }
         return null;
+    }
+//    public String visit(NotExpression)
+    /**
+     * Grammar production:
+     * f0 -> "!"
+     * f1 -> Clause()
+     */
+    public String visit(NotExpression n, String scope)throws Exception{
+        String clause = n.f1.accept(this,scope);
+        if(clause==null) {
+            System.out.println("undefined expression");
+        }
+        else if(!clause.equals("boolean")){
+            System.out.println("type error, can't apply logical operator to " + clause);
+        }
+        return "boolean";
+    }
+    /**
+     * Grammar production:
+     * f0 -> IntegerLiteral()
+     *       | TrueLiteral()
+     *       | FalseLiteral()
+     *       | Identifier()
+     *       | ThisExpression()
+     *       | ArrayAllocationExpression()
+     *       | AllocationExpression()
+     *       | BracketExpression()
+     */
+
+    public String visit(PrimaryExpression n, String scope) throws Exception {
+        String pexp = n.f0.accept(this,scope);
+        Map<String,String> ST = DeclVisitor.vardec.get(scope);
+        if(basictypes.contains(pexp)){
+            return pexp;
+        }
+        else if(ST.get(pexp)!=null){
+            return ST.get(pexp);
+        }
+        else if(DeclVisitor.classdec.keySet().contains(pexp)){
+            return pexp;
+        }
+        else {
+            return null;
+        }
+
+
+
+
+    }
+    public String visit(BooleanArrayType n,String scope) {
+        return "boolean[]";
+    }
+    @Override
+    public String visit(IntegerArrayType n,String scope) {
+        return "int[]";
+    }
+
+    public String visit(BooleanType n, String scope) {
+        return "boolean";
+    }
+
+    public String visit(IntegerType n, String scope) {
+        return "int";
+    }
+
+    public String visit(IntegerLiteral n, String scope){
+        return  "int";
+    }
+
+    public String visit(TrueLiteral n, String scope){
+        return "boolean";
+    }
+
+    public String visit(FalseLiteral n, String scope){
+        return "boolean";
+    }
+    public String visit(ThisExpression n, String scope){
+        String classname = scope.split("::")[0];
+        return classname;
+    }
+
+    public String visit(BooleanArrayAllocationExpression n, String scope){
+        return "boolean[]";
+    }
+
+    public String visit(IntegerArrayAllocationExpression n,String scope){
+        return "int[]";
+    }
+
+    public String visit(AllocationExpression n, String scope) throws Exception {
+        return n.f1.accept(this,scope);
+    }
+    /**
+     * Grammar production:
+     * f0 -> "("
+     * f1 -> Expression()
+     * f2 -> ")"
+     */
+    public String visit(BracketExpression n, String scope) throws Exception{
+        return n.f1.accept(this,scope);
+    }
+    @Override
+    public String visit(Identifier n, String scope) {
+//        ErrorInfo.line = n.f0.beginLine;
+//        ErrorInfo.type = n.f0.
+        return n.f0.toString();
     }
 }
