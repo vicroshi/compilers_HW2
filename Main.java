@@ -215,6 +215,7 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                 redefinition_error("method",method[1],"class "+classname);
             }
         }
+        methdec.put(classname,methods_st);
 //        System.out.println("Class: " + classname +" extends " + extname);
 //        EXTMap.put(classname,extname);
         return null;
@@ -278,6 +279,7 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                     System.out.println(("error: to redefine parent class"+
                             " function both return and parameters types must match"));
                 }
+//                methdec.put()
             }
         }
         mparams.put(argu+"::"+methodname,paramtypes);
@@ -459,7 +461,7 @@ class TypeVisitor extends GJDepthFirst<String,String>{
      */
     public String visit(ClassExtendsDeclaration n, String scope) throws Exception{
         String classname = n.f1.accept(this,scope);
-        n.f4.accept(this,classname);
+        n.f6.accept(this,classname);
         return classname;
     }
     /**
@@ -480,7 +482,14 @@ class TypeVisitor extends GJDepthFirst<String,String>{
     public String visit(MethodDeclaration n, String scope) throws Exception{
         String methodname = n.f2.accept(this,scope);
         n.f8.accept(this,scope+"::"+methodname);
-        n.f10.accept(this,scope+"::"+methodname);
+        String exptype = n.f10.accept(this,scope+"::"+methodname);
+        System.out.println(scope+"::"+methodname);
+        String returntype = DeclVisitor.methdec.get(scope).get(methodname);
+        if (!(returntype.equals(exptype))){
+            System.out.println(String.format("error: trying to return" +
+                    " value of type %s from method of type %s",
+                    exptype,returntype));
+        }
         return null;
     }
 
@@ -519,6 +528,67 @@ class TypeVisitor extends GJDepthFirst<String,String>{
 //    }
     /**
      * Grammar production:
+     * f0 -> "while"
+     * f1 -> "("
+     * f2 -> Expression()
+     * f3 -> ")"
+     * f4 -> Statement()
+     */
+    public String visit(WhileStatement n, String scope) throws Exception{
+       String exp = n.f2.accept(this,scope);
+       if(!"boolean".equals(exp)){
+           System.out.printf("error: while condition must be of type boolean not %s",exp);
+       }
+       n.f4.accept(this,scope);
+       return null;
+    }
+    /**
+     * Grammar production:
+     * f0 -> "if"
+     * f1 -> "("
+     * f2 -> Expression()
+     * f3 -> ")"
+     * f4 -> Statement()
+     * f5 -> "else"
+     * f6 -> Statement()
+     */
+    public String visit(IfStatement n, String scope) throws Exception{
+        String exp = n.f2.accept(this,scope);
+        if(!"boolean".equals(exp)){
+            System.out.printf("error: if condition must be of type boolean not %s",exp);
+        }
+        n.f4.accept(this,scope);
+        n.f6.accept(this,scope);
+        return null;
+    }
+    /**
+     * Grammar production:
+     * f0 -> Identifier()
+     * f1 -> "["
+     * f2 -> Expression()
+     * f3 -> "]"
+     * f4 -> "="
+     * f5 -> Expression()
+     * f6 -> ";"
+     */
+    public String visit(ArrayAssignmentStatement n, String scope) throws Exception {
+        String arr = n.f0.accept(this, scope);
+        if (!arr.endsWith("[]")) {
+            System.out.printf("error: array expected but found %s instead", arr);
+        }
+        String idx = n.f2.accept(this, scope);
+        if (!"int".equals(idx)) {
+            System.out.printf("error: array index must be of type int" +
+                    "not %s%n", idx);
+        }
+        String expr = n.f5.accept(this, scope);
+        if (!(expr + "[]").equals(arr)) {
+            System.out.printf("error: trying to assign %s to %s", expr, arr);
+        }
+        return null;
+    }
+    /**
+     * Grammar production:
      * f0 -> Identifier()
      * f1 -> "="
      * f2 -> Expression()
@@ -539,7 +609,119 @@ class TypeVisitor extends GJDepthFirst<String,String>{
         }
         return null;
     }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "."
+     * f2 -> Identifier()
+     * f3 -> "("
+     * f4 -> ( ExpressionList() )?
+     * f5 -> ")"
+     */
+    public String visit(MessageSend n, String scope) throws Exception{
+        String classname = n.f0.accept(this, scope);
+        String methodname = n.f2.accept(this,scope);
+        if(DeclVisitor.classdec.containsKey(classname)){
+            if(DeclVisitor.methdec.get(classname).containsKey(methodname)){
+                return DeclVisitor.methdec.get(classname).get(methodname);
+            }
+            else{
+                System.out.printf("error: cannot find method %s in class %s%n",methodname,classname);
+            }
+        }
+        else{
+            System.out.printf("error: cannot find class %s%n",classname);
+        }
+        return null;
+    }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "."
+     * f2 -> "length"
+     */
+    public String visit(ArrayLength n, String scope) throws Exception{
+        String arr = n.f0.accept(this,scope);
+        if(!arr.endsWith("[]")){
+            System.out.println(String.format("error: %s cannot" +
+                    " has not attribute length",arr));
+        }
+        return "int";
+    }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "["
+     * f2 -> PrimaryExpression()
+     * f3 -> "]"
+     */
+    public String visit(ArrayLookup n, String scope) throws Exception{
+        String arr = n.f0.accept(this,scope);
+        String idx = n.f2.accept(this,scope);
+        if(!"int".equals(idx)){
+            System.out.println(String.format("error: array index must be of type int" +
+                    "not %s",idx));
+        }
+        return arr;
+    }
 //    public String visit(NotExpression)
+
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "+"
+     * f2 -> PrimaryExpression()
+     */
+    public String visit(PlusExpression n, String scope) throws Exception{
+        String lexp = n.f0.accept(this,scope);
+        String rexp = n.f2.accept(this,scope);
+        if(!"int".equals(lexp) || !"int".equals(rexp)){
+            System.out.println("error: bad operand type for operator '+'");
+        }
+        return "int";
+    }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "-"
+     * f2 -> PrimaryExpression()
+     */
+    public String visit(MinusExpression n, String scope) throws Exception{
+        String lexp = n.f0.accept(this,scope);
+        String rexp = n.f2.accept(this,scope);
+        if(!"int".equals(lexp) || !"int".equals(rexp)){
+            System.out.println("error: bad operand type for operator '-'");
+        }
+        return "int";
+    }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "*"
+     * f2 -> PrimaryExpression()
+     */
+    public String visit(TimesExpression n, String scope) throws Exception{
+        String lexp = n.f0.accept(this,scope);
+        String rexp = n.f2.accept(this,scope);
+        if(!"int".equals(lexp) || !"int".equals(rexp)){
+            System.out.println("error: bad operand type for operator '*'");
+        }
+        return "int";
+    }
+    /**
+     * Grammar production:
+     * f0 -> PrimaryExpression()
+     * f1 -> "<"
+     * f2 -> PrimaryExpression()
+     */
+    public String visit(CompareExpression n, String scope) throws Exception{
+        String lexp = n.f0.accept(this,scope);
+        String rexp = n.f2.accept(this,scope);
+        if(!"int".equals(lexp) || !"int".equals(rexp)){
+            System.out.println("error: bad operand type for operator '<'");
+        }
+        return "boolean";
+    }
     /**
      * Grammar production:
      * f0 -> "!"
@@ -576,9 +758,6 @@ class TypeVisitor extends GJDepthFirst<String,String>{
         else if(ST.get(pexp)!=null){
             return ST.get(pexp);
         }
-        else if(DeclVisitor.classdec.keySet().contains(pexp)){
-            return pexp;
-        }
         else {
             return null;
         }
@@ -587,6 +766,7 @@ class TypeVisitor extends GJDepthFirst<String,String>{
 
 
     }
+
     public String visit(BooleanArrayType n,String scope) {
         return "boolean[]";
     }
@@ -627,6 +807,13 @@ class TypeVisitor extends GJDepthFirst<String,String>{
         return "int[]";
     }
 
+    /**
+     * Grammar production:
+     * f0 -> "new"
+     * f1 -> Identifier()
+     * f2 -> "("
+     * f3 -> ")"
+     */
     public String visit(AllocationExpression n, String scope) throws Exception {
         return n.f1.accept(this,scope);
     }
