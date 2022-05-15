@@ -15,63 +15,32 @@ Main {
             FileInputStream fis=null;
             try {
                 fis = new FileInputStream(args[i]);
+                Error.fis = fis;
                 System.out.printf("\nParsing file %s\n",args[i]);
                 MiniJavaParser parser = new MiniJavaParser(fis);
                 Goal root = parser.Goal();
                 System.err.println("Program parsed successfully.");
                 DeclVisitor decvis = new DeclVisitor();
                 root.accept(decvis, null);
-//                System.out.println("Field Symbol Table:");
-//                for (Map.Entry<String, String> e : decvis.cfields.entrySet()) {
-//                    System.out.println(e.getValue() + " " + e.getKey());
-//                }
-//                System.out.println("\nMethod Symbol Table:");
-//                for (Map.Entry<String, String> e : decvis.cmethods.entrySet()) {
-//                    System.out.println(e.getValue() + " " + e.getKey());
-//                }
-//                System.out.println("\nMethod Parameter Symbol Table:");
-//                for (Map.Entry<String, String> e : decvis.mparams.entrySet()) {
-//                    System.out.println(e.getKey() + "(" + e.getValue() + ")");
-//                }
-//                System.out.println("\nMethod LocalVar Symbol Table:");
-//                for (Map.Entry<String, String> e : decvis.mvars.entrySet()) {
-//                    System.out.println(e.getValue() + " " + e.getKey());
-//                }
-//                System.out.println("\nClass Inheritance Table:");
-//                for (Map.Entry<String, String> e : decvis.cextends.entrySet()) {
-//                    System.out.println(e.getKey() + " extends " + e.getValue());
-//                }
-//                for (Map.Entry<String,Map<String,String>> e_outter : DeclVisitor.vardec.entrySet()){
-//                    System.out.println(e_outter.getKey() + " Symbol Table");
-//                    for (Map.Entry<String,String>  e_inner : e_outter.getValue().entrySet()){
-//                        System.out.println(e_inner.getValue() + " " + e_inner.getKey());
-//                    }
-//                }
-//                for (Map.Entry<String,Map<String,String>> e_outter : DeclVisitor.methdec.entrySet()){
-//                    System.out.println(e_outter.getKey() + " Method Symbol Table");
-//                    for (Map.Entry<String,String>  e_inner : e_outter.getValue().entrySet()){
-//                        System.out.println(e_inner.getValue() + " " + e_inner.getKey());
-//                    }
-//                }
-//                for(Map.Entry<String,String> field : DeclVisitor.vardec.get("BBS").entrySet()){
-//                    System.out.println(field.getValue() +" "+ field.getKey());
-//                }
                 TypeVisitor typevis = new TypeVisitor();
                 root.accept(typevis,null);
                 if(TypeVisitor.errors==0){
                     for(String scope : DeclVisitor.classdec.keySet()){
-                        System.out.printf("-----------Class %s-----------\n",scope);
-                        System.out.println("--Variables--\n");
-                        if(DeclVisitor.fieldoffsets.containsKey(scope)) {
-                            for (Map.Entry<String, Integer> f_e : DeclVisitor.fieldoffsets.get(scope).entrySet()) {
-                                System.out.printf("%s.%s: %d\n",scope,f_e.getKey(),f_e.getValue());
+                        if(!scope.equals(DeclVisitor.mainclass)) {
+                            System.out.printf("-----------Class %s-----------\n", scope);
+                            System.out.println("--Variables--");
+                            if (DeclVisitor.fieldoffsets.containsKey(scope)) {
+                                for (Map.Entry<String, Integer> f_e : DeclVisitor.fieldoffsets.get(scope).entrySet()) {
+                                    System.out.printf("%s.%s: %d\n", scope, f_e.getKey(), f_e.getValue());
+                                }
                             }
-                        }
-                        System.out.println("---Methods---\n");
-                        if(DeclVisitor.methoffsets.containsKey(scope)) {
-                            for (Map.Entry<String, Integer> m_e : DeclVisitor.methoffsets.get(scope).entrySet()) {
-                                System.out.printf("%s.%s: %d\n",scope,m_e.getKey(),m_e.getValue());
+                            System.out.println("---Methods---");
+                            if (DeclVisitor.methoffsets.containsKey(scope)) {
+                                for (Map.Entry<String, Integer> m_e : DeclVisitor.methoffsets.get(scope).entrySet()) {
+                                    System.out.printf("%s.%s : %d\n", scope, m_e.getKey(), m_e.getValue());
+                                }
                             }
+                            System.out.println();
                         }
                     }
                 }
@@ -90,10 +59,9 @@ Main {
     }
 }
 
-class SemanticError extends Exception{
-    public String getMessage(String error){
-        return "Semantic Error: "+error;
-    }
+class Error{
+    public static FileInputStream fis;
+    public static int errLine;
 }
 
 class DeclVisitor extends GJDepthFirst<String,String>{
@@ -101,6 +69,7 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     static Map<String,Map<String,String>> vardec;
     static Map<String,Map<String,String>> methdec;
     static Map<String,String> classdec;
+    static String mainclass;
     static Map<String,Map<String, Integer>> methoffsets;
     static Map<String,Map<String,Integer>> fieldoffsets;
     public DeclVisitor(){
@@ -152,10 +121,21 @@ class DeclVisitor extends GJDepthFirst<String,String>{
         System.out.printf("error: %s %s is already defined in %s%n",type,var,scope);
         TypeVisitor.errors++;
     }
+    public boolean overriden(String classname, String methodname){
+        String ext = classname;
+        while (ext!=null ){
+            if(methdec.containsKey(ext) && methdec.get(ext).containsKey(methodname)){
+                return true;
+            }
+            ext = classdec.get(ext);
+        }
+        return false;
+    }
 
     public String visit(MainClass n, String argu) throws Exception {
         String classname =  n.f1.accept(this,argu);
         classdec.put(classname,null);
+        mainclass = classname;
         String mainvars = n.f14.accept(this,argu);
         Map<String,String> vars = new LinkedHashMap<String,String>();
         if(!mainvars.isEmpty()) {
@@ -206,8 +186,12 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                 redefinition_error("variable",field[1],"class " +classname);
             }
         }
-        vardec.put(classname,fields_st);
-        fieldoffsets.put(classname,fields_off);
+        if(!fields_st.isEmpty()) {
+            vardec.put(classname, fields_st);
+        }
+        if(!fields_off.isEmpty()) {
+            fieldoffsets.put(classname, fields_off);
+        }
         Map<String,String> methods_st = new LinkedHashMap<String, String>();
         String methods = n.f4.present()?n.f4.accept(this,classname):",";
         Map<String ,Integer>  methods_off = new LinkedHashMap<String, Integer>();
@@ -223,8 +207,12 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                 redefinition_error("method",method[1],"class " + classname);
             }
         }
-        methdec.put(classname,methods_st);
-        methoffsets.put(classname,methods_off);
+        if(!methods_st.isEmpty()) {
+            methdec.put(classname, methods_st);
+        }
+        if(!methods_off.isEmpty()){
+            methoffsets.put(classname, methods_off);
+        }
         return null;
     }
 
@@ -246,21 +234,33 @@ class DeclVisitor extends GJDepthFirst<String,String>{
         String extname = n.f3.accept(this,classname);
         int f_offset;
         int m_offset;
-        if(!classdec.containsKey(extname)){
-            System.out.printf("class %s must be defined before class %s\n",extname,classname);
+        if(!classdec.containsKey(extname)) {
+            System.out.printf("class %s must be defined before class %s\n", extname, classname);
             TypeVisitor.errors++;
             classdec.put(classname,null);
             f_offset = 0;
             m_offset = 0;
         }
-        else {
-            String[] f_orderedKeys = fieldoffsets.get(extname).keySet().toArray(new String[fieldoffsets.get(extname).size()]);
-            String[] m_orderedKeys = methoffsets.get(extname).keySet().toArray(new String[methoffsets.get(extname).size()]);
-            int f_last = f_orderedKeys.length - 1;
-            int m_last = m_orderedKeys.length - 1;
-            classdec.put(classname,extname);
-            f_offset = fieldoffsets.get(extname).get(f_orderedKeys[f_last]) + sizeof(vardec.get(extname).get(f_orderedKeys[f_last]));
-            m_offset = methoffsets.get(extname).get(m_orderedKeys[m_last]) + sizeof(methdec.get(extname).get(m_orderedKeys[m_last]));
+        else{
+//            System.out.println(extname);
+            if(fieldoffsets.containsKey(extname)){
+                String[] f_orderedKeys = fieldoffsets.get(extname).keySet().toArray(new String[fieldoffsets.get(extname).size()]);
+                int f_last = f_orderedKeys.length - 1;
+                f_offset = fieldoffsets.get(extname).get(f_orderedKeys[f_last]) + sizeof(vardec.get(extname).get(f_orderedKeys[f_last]));
+            }
+            else{
+                f_offset = 0;
+            }
+            if(methoffsets.containsKey(extname)) {
+//                System.out.println(extname);
+                String[] m_orderedKeys = methoffsets.get(extname).keySet().toArray(new String[methoffsets.get(extname).size()]);
+                int m_last = m_orderedKeys.length - 1;
+                m_offset = methoffsets.get(extname).get(m_orderedKeys[m_last]) + 8;
+            }
+            else{
+                m_offset = 0;
+            }
+            classdec.put(classname, extname);
         }
         String fields = n.f5.present()?n.f5.accept(this,classname):",";
         Map<String,String> fields_st = new LinkedHashMap<String, String>();
@@ -276,8 +276,12 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                 redefinition_error("variable",field[1],"class " +classname);
             }
         }
-        vardec.put(classname,fields_st);
-        fieldoffsets.put(classname,fields_off);
+        if(!fields_st.isEmpty()) {
+            vardec.put(classname, fields_st);
+        }
+        if(!fields_off.isEmpty()) {
+            fieldoffsets.put(classname, fields_off);
+        }
         Map<String,String> methods_st = new LinkedHashMap<String, String>();
         Map<String,Integer> methods_off = new LinkedHashMap<String, Integer>();
         String methods = n.f6.present()?n.f6.accept(this,classname):",";
@@ -286,16 +290,21 @@ class DeclVisitor extends GJDepthFirst<String,String>{
             String[] method = m.split(" ");
             if(!methods_st.containsKey(method[1])){
                 methods_st.put(method[1],method[0]);
-                methods_off.put(method[1],m_offset);
-                m_offset+=sizeof(method[0]);
+                if(!overriden(extname,method[1])){
+                    methods_off.put(method[1],m_offset);
+                }
+                m_offset+=8;
             }
             else {
                 redefinition_error("method",method[1],"class "+classname);
             }
         }
-        methdec.put(classname,methods_st);
-        methoffsets.put(classname,methods_off);
-
+        if(!methods_st.isEmpty()) {
+            methdec.put(classname, methods_st);
+        }
+        if(!methods_off.isEmpty()){
+            methoffsets.put(classname, methods_off);
+        }
 //        System.out.println("Class: " + classname +" extends " + extname);
 //        EXTMap.put(classname,extname);
         return null;
@@ -349,7 +358,9 @@ class DeclVisitor extends GJDepthFirst<String,String>{
                 redefinition_error("variable",localvar[1],"method " + argu+"::"+methodname);
             }
         }
-        vardec.put(argu+"::"+methodname,locvars);
+        if(!locvars.isEmpty()){
+            vardec.put(argu+"::"+methodname,locvars);
+        }
         String ext = classdec.get(argu);
         while(ext!=null) {
             if (mparams.containsKey(ext + "::" + methodname)) {
@@ -384,11 +395,9 @@ class DeclVisitor extends GJDepthFirst<String,String>{
     @Override
     public String visit(FormalParameterList n, String argu) throws Exception {
         String ret = n.f0.accept(this, null);
-
         if (n.f1.f0.present()) {
             ret += n.f1.accept(this, null);
         }
-
         return ret;
     }
 
@@ -410,7 +419,6 @@ class DeclVisitor extends GJDepthFirst<String,String>{
         for ( Node node: n.f0.nodes) {
             ret += "," + node.accept(this, null);
         }
-
         return ret;
     }
     /**
@@ -762,7 +770,8 @@ class TypeVisitor extends GJDepthFirst<String,String>{
      */
     public String visit(AssignmentStatement n, String scope) throws Exception {
         String lval = n.f0.accept(this,scope);
-        String lvaltype = DeclVisitor.vardec.get(scope).get(lval);
+//        System.out.println(scope);
+        String lvaltype = DeclVisitor.vardec.containsKey(scope)?DeclVisitor.vardec.get(scope).get(lval):null;
         if(lvaltype == null){
             String classname = scope.split("::")[0];
             lvaltype = DeclVisitor.vardec.containsKey(classname)?DeclVisitor.vardec.get(classname).get(lval):null;

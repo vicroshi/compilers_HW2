@@ -3,6 +3,7 @@ out/
 syntaxtree/
 visitor/
 javacc/
+minijava-examples-new/
 *.class
 *.txt
 Example.java
